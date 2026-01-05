@@ -1,418 +1,59 @@
-<!doctype html>
-<html lang="ko">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>오늘의 할 일</title>
-  <style>
-    :root{
-      --bg1:#0ea5e9;      /* sky */
-      --bg2:#8b5cf6;      /* violet */
-      --card:#0b1220cc;   /* translucent */
-      --stroke:#ffffff1a;
-      --text:#e8eefc;
-      --muted:#a9b4d6;
-      --shadow: 0 20px 60px rgba(0,0,0,.35);
-      --radius: 18px;
+<div>Teachable Machine Image Model</div>
+<button type="button" onclick="init()">Start</button>
+<div id="webcam-container"></div>
+<div id="label-container"></div>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+<script type="text/javascript">
+    // More API functions here:
+    // https://github.com/googlecreativelab/teachablemachine-community/tree/master/libraries/image
+
+    // the link to your model provided by Teachable Machine export panel
+    const URL = "./my_model/";
+
+    let model, webcam, labelContainer, maxPredictions;
+
+    // Load the image model and setup the webcam
+    async function init() {
+        const modelURL = URL + "model.json";
+        const metadataURL = URL + "metadata.json";
+
+        // load the model and metadata
+        // Refer to tmImage.loadFromFiles() in the API to support files from a file picker
+        // or files from your local hard drive
+        // Note: the pose library adds "tmImage" object to your window (window.tmImage)
+        model = await tmImage.load(modelURL, metadataURL);
+        maxPredictions = model.getTotalClasses();
+
+        // Convenience function to setup a webcam
+        const flip = true; // whether to flip the webcam
+        webcam = new tmImage.Webcam(200, 200, flip); // width, height, flip
+        await webcam.setup(); // request access to the webcam
+        await webcam.play();
+        window.requestAnimationFrame(loop);
+
+        // append elements to the DOM
+        document.getElementById("webcam-container").appendChild(webcam.canvas);
+        labelContainer = document.getElementById("label-container");
+        for (let i = 0; i < maxPredictions; i++) { // and class labels
+            labelContainer.appendChild(document.createElement("div"));
+        }
     }
 
-    *{ box-sizing:border-box; }
-    body{
-      margin:0;
-      min-height:100vh;
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Apple SD Gothic Neo, Noto Sans KR, "Malgun Gothic", sans-serif;
-      color:var(--text);
-      overflow-x:hidden;
-      background: radial-gradient(1200px 900px at 20% 10%, rgba(255,255,255,.18), transparent 55%),
-                  radial-gradient(1000px 800px at 80% 30%, rgba(255,255,255,.12), transparent 60%),
-                  linear-gradient(135deg, var(--bg1), var(--bg2));
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      padding:28px 14px;
+    async function loop() {
+        webcam.update(); // update the webcam frame
+        await predict();
+        window.requestAnimationFrame(loop);
     }
 
-    .wrap{
-      width:min(760px, 100%);
-      display:grid;
-      grid-template-columns: 1fr;
-      gap:16px;
+    // run the webcam image through the image model
+    async function predict() {
+        // predict can take in an image, video or canvas html element
+        const prediction = await model.predict(webcam.canvas);
+        for (let i = 0; i < maxPredictions; i++) {
+            const classPrediction =
+                prediction[i].className + ": " + prediction[i].probability.toFixed(2);
+            labelContainer.childNodes[i].innerHTML = classPrediction;
+        }
     }
-
-    .card{
-      background: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.02));
-      border:1px solid var(--stroke);
-      border-radius: var(--radius);
-      box-shadow: var(--shadow);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      overflow:hidden;
-    }
-
-    .header{
-      padding:22px 22px 12px;
-      border-bottom:1px solid var(--stroke);
-      display:flex;
-      align-items:flex-end;
-      justify-content:space-between;
-      gap:12px;
-    }
-
-    .title{
-      display:flex;
-      flex-direction:column;
-      gap:6px;
-    }
-
-    .title h1{
-      margin:0;
-      font-size:22px;
-      letter-spacing:-0.3px;
-      line-height:1.2;
-    }
-
-    .title p{
-      margin:0;
-      color:var(--muted);
-      font-size:13px;
-    }
-
-    .chip{
-      font-size:12px;
-      color: rgba(255,255,255,.85);
-      border:1px solid var(--stroke);
-      padding:6px 10px;
-      border-radius:999px;
-      background: rgba(0,0,0,.15);
-      white-space:nowrap;
-    }
-
-    .content{
-      padding:18px 22px 22px;
-    }
-
-    .row{
-      display:flex;
-      gap:10px;
-      align-items:center;
-      flex-wrap:wrap;
-    }
-
-    .input{
-      flex:1 1 320px;
-      display:flex;
-      gap:10px;
-      align-items:center;
-      padding:10px 12px;
-      border-radius: 14px;
-      border:1px solid var(--stroke);
-      background: rgba(0,0,0,.18);
-      transition: transform .12s ease, border-color .12s ease;
-    }
-
-    .input:focus-within{
-      transform: translateY(-1px);
-      border-color: rgba(255,255,255,.28);
-    }
-
-    .input input{
-      width:100%;
-      border:0;
-      outline:0;
-      color:var(--text);
-      background: transparent;
-      font-size:14px;
-      padding:6px 2px;
-    }
-
-    .input input::placeholder{ color: rgba(233,238,252,.55); }
-
-    .btn{
-      cursor:pointer;
-      border:0;
-      color: white;
-      font-weight:600;
-      letter-spacing:-0.2px;
-      padding:12px 14px;
-      border-radius: 14px;
-      background: linear-gradient(135deg, rgba(255,255,255,.22), rgba(255,255,255,.08));
-      border:1px solid rgba(255,255,255,.18);
-      box-shadow: 0 10px 24px rgba(0,0,0,.22);
-      transition: transform .12s ease, filter .12s ease;
-      user-select:none;
-    }
-    .btn:hover{ transform: translateY(-1px); filter: brightness(1.05); }
-    .btn:active{ transform: translateY(0px); filter: brightness(.98); }
-
-    .btn.secondary{
-      background: rgba(0,0,0,.20);
-      box-shadow:none;
-    }
-
-    .meta{
-      margin-top:14px;
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:12px;
-      flex-wrap:wrap;
-      color:var(--muted);
-      font-size:12.5px;
-    }
-
-    ul{
-      list-style:none;
-      padding:0;
-      margin:16px 0 0;
-      display:flex;
-      flex-direction:column;
-      gap:10px;
-    }
-
-    .item{
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:12px;
-      padding:12px 14px;
-      border-radius: 14px;
-      border:1px solid var(--stroke);
-      background: rgba(0,0,0,.14);
-      transition: transform .12s ease, background .12s ease;
-    }
-
-    .item:hover{
-      transform: translateY(-1px);
-      background: rgba(0,0,0,.18);
-    }
-
-    .left{
-      display:flex;
-      gap:10px;
-      align-items:center;
-      min-width:0;
-    }
-
-    .check{
-      width:18px; height:18px;
-      border-radius: 6px;
-      border:1px solid rgba(255,255,255,.35);
-      background: rgba(255,255,255,.08);
-      display:grid;
-      place-items:center;
-      flex:0 0 auto;
-    }
-
-    .text{
-      font-size:14px;
-      white-space:nowrap;
-      overflow:hidden;
-      text-overflow:ellipsis;
-      color: rgba(255,255,255,.92);
-    }
-
-    .right{
-      display:flex;
-      gap:8px;
-      align-items:center;
-      flex:0 0 auto;
-    }
-
-    .pill{
-      font-size:11px;
-      padding:6px 10px;
-      border-radius:999px;
-      border:1px solid var(--stroke);
-      color: rgba(255,255,255,.78);
-      background: rgba(255,255,255,.06);
-    }
-
-    .danger{
-      cursor:pointer;
-      border:1px solid rgba(255,255,255,.16);
-      background: rgba(255,255,255,.06);
-      color: rgba(255,255,255,.82);
-      padding:8px 10px;
-      border-radius: 12px;
-      transition: transform .12s ease, filter .12s ease;
-      font-size:12px;
-    }
-    .danger:hover{ transform: translateY(-1px); filter: brightness(1.05); }
-    .danger:active{ transform: translateY(0); }
-
-    .empty{
-      margin-top:16px;
-      padding:14px;
-      border-radius: 14px;
-      border:1px dashed rgba(255,255,255,.22);
-      color: rgba(233,238,252,.70);
-      background: rgba(0,0,0,.10);
-      font-size:13px;
-    }
-
-    @media (max-width:520px){
-      .header{ align-items:flex-start; }
-      .chip{ display:none; }
-    }
-  </style>
-</head>
-<body>
-  <div class="wrap">
-    <div class="card">
-      <div class="header">
-        <div class="title">
-          <h1>오늘의 할 일</h1>
-          <p>추가하고, 완료하면 체크해서 즉시 정리하세요.</p>
-        </div>
-        <div class="chip" id="todayChip"></div>
-      </div>
-
-      <div class="content">
-        <div class="row">
-          <div class="input">
-            <input id="todoInput" type="text" maxlength="120" placeholder="할 일을 입력하고 Enter 또는 추가 버튼을 누르세요" />
-          </div>
-          <button class="btn" id="addBtn">추가</button>
-          <button class="btn secondary" id="clearBtn" title="전체 삭제">전체 삭제</button>
-        </div>
-
-        <div class="meta">
-          <div>남은 할 일: <b id="count">0</b>개</div>
-          <div>체크하면 항목이 바로 사라집니다</div>
-        </div>
-
-        <ul id="list"></ul>
-        <div class="empty" id="empty" style="display:none;">아직 할 일이 없어요. 하나 추가해볼까요?</div>
-      </div>
-    </div>
-  </div>
-
-  <script>
-    // ----- Utilities -----
-    const $ = (sel) => document.querySelector(sel);
-
-    const STORAGE_KEY = "today_todos_v1";
-
-    function loadTodos(){
-      try{
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if(!raw) return [];
-        const data = JSON.parse(raw);
-        return Array.isArray(data) ? data : [];
-      }catch(e){
-        return [];
-      }
-    }
-
-    function saveTodos(todos){
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(todos));
-    }
-
-    function formatKoreanDate(d){
-      const y = d.getFullYear();
-      const m = String(d.getMonth() + 1).padStart(2, "0");
-      const day = String(d.getDate()).padStart(2, "0");
-      return `${y}.${m}.${day}`;
-    }
-
-    // ----- State -----
-    let todos = loadTodos(); // { id, text, createdAt }
-
-    // ----- Render -----
-    function render(){
-      const list = $("#list");
-      list.innerHTML = "";
-
-      $("#count").textContent = String(todos.length);
-      $("#empty").style.display = todos.length === 0 ? "block" : "none";
-
-      for(const t of todos){
-        const li = document.createElement("li");
-        li.className = "item";
-        li.dataset.id = t.id;
-
-        li.innerHTML = `
-          <div class="left">
-            <button class="check" aria-label="완료 체크" title="완료(체크하면 사라짐)">
-              ✓
-            </button>
-            <div class="text" title="${escapeHtml(t.text)}">${escapeHtml(t.text)}</div>
-          </div>
-          <div class="right">
-            <span class="pill">${new Date(t.createdAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })}</span>
-            <button class="danger" title="삭제">삭제</button>
-          </div>
-        `;
-
-        // 완료 체크 → 즉시 제거
-        li.querySelector(".check").addEventListener("click", () => {
-          removeTodo(t.id);
-        });
-
-        // 삭제 버튼
-        li.querySelector(".danger").addEventListener("click", () => {
-          removeTodo(t.id);
-        });
-
-        list.appendChild(li);
-      }
-    }
-
-    function escapeHtml(str){
-      return String(str)
-        .replaceAll("&","&amp;")
-        .replaceAll("<","&lt;")
-        .replaceAll(">","&gt;")
-        .replaceAll('"',"&quot;")
-        .replaceAll("'","&#039;");
-    }
-
-    // ----- Actions -----
-    function addTodo(){
-      const input = $("#todoInput");
-      const text = input.value.trim();
-      if(!text) return;
-
-      const item = {
-        id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2),
-        text,
-        createdAt: Date.now()
-      };
-
-      // 최신이 위로 오게
-      todos = [item, ...todos];
-      saveTodos(todos);
-      input.value = "";
-      input.focus();
-      render();
-    }
-
-    function removeTodo(id){
-      todos = todos.filter(t => t.id !== id);
-      saveTodos(todos);
-      render();
-    }
-
-    function clearAll(){
-      if(!todos.length) return;
-      const ok = confirm("정말 전체 삭제할까요?");
-      if(!ok) return;
-      todos = [];
-      saveTodos(todos);
-      render();
-    }
-
-    // ----- Init -----
-    (function init(){
-      $("#todayChip").textContent = formatKoreanDate(new Date());
-      $("#addBtn").addEventListener("click", addTodo);
-      $("#clearBtn").addEventListener("click", clearAll);
-      $("#todoInput").addEventListener("keydown", (e) => {
-        if(e.key === "Enter") addTodo();
-      });
-      render();
-      $("#todoInput").focus();
-    })();
-  </script>
-</body>
-</html>
+</script>
